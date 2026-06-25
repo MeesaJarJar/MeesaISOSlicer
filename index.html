@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeesaJarJar's ISO Slicer V4 — MeesaJarJar.com</title>
+<style>
+  :root{
+    --bg-0:#0b0d10;
+    --bg-1:#13161a;
+    --bg-2:#1a1e24;
+    --bg-3:#23282f;
+    --line:#2c333c;
+    --line-soft:#1f242b;
+    --text-0:#e8ebee;
+    --text-1:#9aa4b2;
+    --text-2:#5e6773;
+    --accent:#ffb238;      /* UO gold — matches the selection diamond in the ref image */
+    --accent-dim:#7a5a22;
+    --teal:#3ddbd9;        /* matches the grid-line teal in the ref image */
+    --teal-dim:#1d4d4c;
+    --danger:#e2584f;
+    --mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+    --sans: "Inter", -apple-system, "Segoe UI", sans-serif;
+    --radius: 6px;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg-0); color:var(--text-0);
+    font-family:var(--sans);
+    overflow:hidden;
+  }
+  button{font-family:inherit;}
+
+  #app{
+    display:grid;
+    grid-template-columns: 1fr 300px;
+    grid-template-rows: 48px 1fr 30px;
+    height:100vh;
+  }
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    grid-column: 1 / 3;
+    display:flex; align-items:center; gap:18px;
+    padding:0 16px;
+    background:var(--bg-1);
+    border-bottom:1px solid var(--line);
+    -webkit-app-region: drag;
+  }
+  #topbar .brand{
+    display:flex; align-items:center; gap:8px;
+    font-weight:700; letter-spacing:0.2px; font-size:14px;
+    color:var(--text-0);
+    flex-shrink:0;
+  }
+  #topbar .brand .mark{
+    width:18px;height:18px;flex-shrink:0;
+  }
+  .toolgroup{
+    display:flex; align-items:center; gap:4px;
+    padding:0 12px;
+    border-left:1px solid var(--line);
+    height:30px;
+  }
+  .tool-btn{
+    display:flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid transparent;
+    color:var(--text-1); border-radius:5px;
+    padding:5px 9px; font-size:12.5px; cursor:pointer;
+    transition: background .12s, color .12s, border-color .12s;
+    white-space:nowrap;
+  }
+  .tool-btn:hover{ background:var(--bg-3); color:var(--text-0); }
+  .tool-btn.active{ background:rgba(255,178,56,0.12); color:var(--accent); border-color:rgba(255,178,56,0.35); }
+  .tool-btn svg{width:14px;height:14px;flex-shrink:0;}
+  .tool-btn .kbd{
+    font-family:var(--mono); font-size:9.5px; color:var(--text-2);
+    background:var(--bg-0); border:1px solid var(--line);
+    border-radius:3px; padding:1px 4px; margin-left:2px;
+  }
+  .tool-btn.active .kbd{ color:var(--accent-dim); border-color:rgba(255,178,56,0.3); }
+
+  #topbar .spacer{flex:1;}
+
+  .field-mini{
+    display:flex; align-items:center; gap:6px;
+    font-size:11.5px; color:var(--text-1);
+  }
+  .field-mini input[type=number]{
+    width:48px; background:var(--bg-0); border:1px solid var(--line);
+    color:var(--text-0); border-radius:4px; padding:4px 6px; font-size:12px;
+    font-family:var(--mono);
+  }
+  .field-mini input[type=number]:focus{ outline:none; border-color:var(--teal); }
+
+  .icon-btn{
+    background:var(--bg-2); border:1px solid var(--line); color:var(--text-1);
+    border-radius:5px; width:30px; height:30px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .icon-btn:hover{ color:var(--text-0); border-color:var(--text-2); }
+  .icon-btn svg{width:15px;height:15px;}
+
+  .primary-btn{
+    background:var(--accent); color:#1a1206; border:none;
+    border-radius:5px; padding:7px 14px; font-size:12.5px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .primary-btn:hover{ background:#ffc25e; }
+  .primary-btn:disabled{ background:var(--bg-3); color:var(--text-2); cursor:not-allowed; }
+  .primary-btn svg{width:14px;height:14px;}
+
+  /* ---------- Canvas area ---------- */
+  #stage-wrap{
+    position:relative;
+    background:
+      linear-gradient(45deg, var(--bg-1) 25%, transparent 25%, transparent 75%, var(--bg-1) 75%) 0 0/24px 24px,
+      linear-gradient(45deg, var(--bg-1) 25%, var(--bg-0) 25%, var(--bg-0) 75%, var(--bg-1) 75%) 12px 12px/24px 24px,
+      var(--bg-0);
+    overflow:hidden;
+  }
+  #stage{
+    position:absolute; inset:0;
+    cursor:default;
+  }
+  #stage canvas{
+    position:absolute;
+    top:0; left:0;
+    width:100%; height:100%;
+    display:block;
+  }
+  #canvas-base{ z-index:1; }
+  #canvas-grid{ z-index:2; pointer-events:none; }
+  #canvas-mask{ z-index:3; pointer-events:none; }
+  #canvas-overlay{ z-index:4; pointer-events:none; }
+  #dropzone{
+    position:absolute; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    pointer-events:none;
+    z-index:5;
+  }
+  #dropzone .card{
+    pointer-events:auto;
+    text-align:center;
+    padding:40px 56px;
+    border:1.5px dashed var(--line);
+    border-radius:10px;
+    background:rgba(19,22,26,0.7);
+    color:var(--text-1);
+    max-width:380px;
+  }
+  #dropzone .card svg{width:40px;height:40px; color:var(--text-2); margin-bottom:14px;}
+  #dropzone .card h2{font-size:15px; color:var(--text-0); margin:0 0 8px; font-weight:600;}
+  #dropzone .card p{font-size:12.5px; line-height:1.6; margin:0 0 16px; color:var(--text-1);}
+  #dropzone .card .or{font-size:11px; color:var(--text-2); margin:10px 0;}
+  #dropzone .card label.filebtn{
+    display:inline-flex; align-items:center; gap:6px;
+    background:var(--bg-3); border:1px solid var(--line); color:var(--text-0);
+    padding:8px 16px; border-radius:5px; font-size:12.5px; cursor:pointer;
+  }
+  #dropzone .card label.filebtn:hover{ border-color:var(--text-2); }
+  #dropzone.drag-over .card{ border-color:var(--teal); background:rgba(61,219,217,0.06); }
+
+  #hud{
+    position:absolute; left:12px; bottom:12px;
+    display:flex; gap:10px; align-items:center;
+    font-family:var(--mono); font-size:11px; color:var(--text-2);
+    background:rgba(19,22,26,0.85); border:1px solid var(--line-soft);
+    padding:6px 10px; border-radius:6px;
+    pointer-events:none;
+  }
+  #hud b{color:var(--text-1); font-weight:500;}
+
+  #zoom-controls{
+    position:absolute; right:12px; bottom:12px;
+    display:flex; gap:4px; align-items:center;
+    background:rgba(19,22,26,0.85); border:1px solid var(--line-soft);
+    border-radius:6px; padding:4px;
+    z-index:10;
+  }
+
+  /* ---------- Right panel ---------- */
+  #panel{
+    background:var(--bg-1);
+    border-left:1px solid var(--line);
+    display:flex; flex-direction:column;
+    overflow:hidden;
+  }
+  .panel-section{
+    border-bottom:1px solid var(--line);
+    padding:14px 14px;
+  }
+  .panel-section.grow{ flex:1; overflow-y:auto; padding-bottom:6px;}
+  .panel-title{
+    font-size:10.5px; text-transform:uppercase; letter-spacing:0.7px;
+    color:var(--text-2); font-weight:700; margin:0 0 10px;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .panel-title .count{
+    font-family:var(--mono); color:var(--text-2); font-weight:400; font-size:10px;
+  }
+
+  .grid-controls{ grid-template-columns: 1fr 1fr; gap:8px; }
+  .grid-controls .gc-field:nth-child(3) .row,
+  .grid-controls .gc-field:nth-child(4) .row { flex-direction: column; align-items: stretch; }
+  .grid-controls .gc-field:nth-child(3) input[type=range],
+  .grid-controls .gc-field:nth-child(4) input[type=range] { margin-bottom: 4px; }
+  .gc-field{ display:flex; flex-direction:column; gap:4px; }
+  .gc-field label{ font-size:11px; color:var(--text-1); }
+  .gc-field .row{ display:flex; align-items:center; gap:6px;}
+  .gc-field input[type=range]{ flex:1; accent-color: var(--teal); }
+  .gc-field input[type=number]{
+    width:46px; background:var(--bg-0); border:1px solid var(--line);
+    color:var(--text-0); border-radius:4px; padding:4px 5px; font-size:11.5px;
+    font-family:var(--mono);
+  }
+  .gc-full{ grid-column: 1 / 3; }
+
+  .hint-box{
+    margin-top:10px;
+    font-size:11.5px; line-height:1.55; color:var(--text-1);
+    background:var(--bg-2); border:1px solid var(--line-soft);
+    border-radius:6px; padding:9px 10px;
+  }
+  .hint-box b{ color:var(--text-0); }
+  .hint-box .step{ display:flex; gap:7px; margin-bottom:5px; align-items:flex-start;}
+  .hint-box .step:last-child{margin-bottom:0;}
+  .hint-box .step .n{
+    flex-shrink:0; width:15px; height:15px; border-radius:3px;
+    background:var(--bg-3); color:var(--text-1); font-family:var(--mono);
+    font-size:9.5px; display:flex; align-items:center; justify-content:center;
+    margin-top:1px;
+  }
+
+  /* Layer list */
+  #layer-list{ display:flex; flex-direction:column; gap:6px; }
+  .layer-empty{
+    text-align:center; color:var(--text-2); font-size:11.5px;
+    padding:24px 10px; border:1px dashed var(--line-soft); border-radius:6px;
+  }
+  .layer-item{
+    display:flex; align-items:center; gap:8px;
+    background:var(--bg-2); border:1px solid var(--line-soft);
+    border-radius:6px; padding:7px 8px;
+    cursor:pointer;
+  }
+  .layer-item:hover{ border-color:var(--line); }
+  .layer-item.selected{ border-color: var(--accent); background:rgba(255,178,56,0.07); }
+  .layer-item .swatch{
+    width:30px; height:30px; border-radius:4px; flex-shrink:0;
+    background-size:cover; background-position:center;
+    background-color:#000;
+    border:1px solid var(--line-soft);
+    background-image:
+      linear-gradient(45deg, #2a2a2a 25%, transparent 25%, transparent 75%, #2a2a2a 75%) , 
+      linear-gradient(45deg, #2a2a2a 25%, #1a1a1a 25%, #1a1a1a 75%, #2a2a2a 75%);
+    background-size:8px 8px, 8px 8px;
+    background-position:0 0, 4px 4px;
+  }
+  .layer-item .swatch img{ width:100%; height:100%; object-fit:contain; display:block; }
+  .layer-item .meta{ flex:1; min-width:0; }
+  .layer-item .name{
+    font-size:12px; color:var(--text-0); font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    background:transparent; border:none; width:100%; padding:0;
+    font-family:inherit;
+  }
+  .layer-item .name:focus{ outline:none; }
+  .layer-item .sub{
+    font-size:10px; color:var(--text-2); font-family:var(--mono); margin-top:1px;
+  }
+  .layer-item .actions{ display:flex; gap:2px; flex-shrink:0; }
+  .layer-item .actions button{
+    background:transparent; border:none; color:var(--text-2);
+    width:22px; height:22px; border-radius:4px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .layer-item .actions button:hover{ background:var(--bg-3); color:var(--text-0); }
+  .layer-item .actions button.danger:hover{ color:var(--danger); }
+  .layer-item .actions svg{ width:13px; height:13px; }
+
+  #export-section{ padding:12px 14px 14px; border-top:1px solid var(--line); }
+  .export-row{ display:flex; gap:8px; }
+  .export-row .primary-btn{ flex:1; justify-content:center; }
+  .export-note{ font-size:10.5px; color:var(--text-2); margin-top:8px; line-height:1.5;}
+
+  /* Status bar */
+  #statusbar{
+    grid-column: 1 / 3;
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--bg-1); border-top:1px solid var(--line);
+    padding:0 14px; font-size:11px; color:var(--text-2);
+    font-family:var(--mono);
+  }
+  #statusbar .left{ display:flex; gap:14px; }
+  #statusbar .msg{ color: var(--text-1); }
+
+  /* Mask drawing cursor states */
+  #stage.tool-mask{ cursor: crosshair; }
+  #stage.tool-pan{ cursor: grab; }
+  #stage.tool-pan.panning{ cursor: grabbing; }
+  #stage.tool-select{ cursor: pointer; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:var(--bg-3); border-radius:5px; }
+  ::-webkit-scrollbar-thumb:hover{ background:var(--line); }
+
+  .divider-label{
+    font-size:10px; color:var(--text-2); text-transform:uppercase; letter-spacing:0.5px;
+    margin: 2px 0 8px;
+  }
+
+  /* toast */
+  #toast{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%) translateY(-8px);
+    background:var(--bg-3); border:1px solid var(--line); color:var(--text-0);
+    padding:9px 16px; border-radius:7px; font-size:12.5px;
+    opacity:0; pointer-events:none; transition: opacity .2s, transform .2s;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    z-index:50;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.error{ border-color: rgba(226,88,79,0.5); color:#ffb3ae; }
+
+  select.theme-select{
+    background:var(--bg-0); border:1px solid var(--line); color:var(--text-0);
+    border-radius:4px; padding:4px 6px; font-size:11.5px; font-family:inherit;
+  }
+
+  .checkbox-row{ display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--text-1); margin-top:8px;}
+  .checkbox-row input{ accent-color:var(--teal); }
+  </style>
+</head>
+<body>
+<!-- Debug: File input test -->
+<script>
+// Test file input functionality
+function testFileInput() {
+  const fileInput = document.getElementById('file-input');
+  if (fileInput) {
+    console.log('File input element found:', fileInput);
+    console.log('Label for attribute:', fileInput.labels ? fileInput.labels[0] : 'No label found');
+    
+    // Add click event to test
+    fileInput.addEventListener('change', function(e) {
+      console.log('File input change event triggered');
+      if (e.target.files && e.target.files[0]) {
+        console.log('File selected:', e.target.files[0].name);
+      }
+    });
+    
+    // Make label clickable
+    const label = fileInput.labels ? fileInput.labels[0] : null;
+    if (label) {
+      label.style.cursor = 'pointer';
+      label.title = 'Click to select an image file';
+    }
+  }
+}
+
+// Run test when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', testFileInput);
+} else {
+  testFileInput();
+}
+</script>
+<div id="app">
+
+  <div id="topbar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 24 24" fill="none"><path d="M12 2L22 8V16L12 22L2 16V8L12 2Z" stroke="#ffb238" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 2V22M2 8L22 16M22 8L2 16" stroke="#3ddbd9" stroke-width="0.8" opacity="0.6"/></svg>
+      MeesaJarJar's ISO Slicer V4
+      <span style="font-size:0.65em;opacity:0.5;margin-left:6px;">MeesaJarJar.com</span>
+    </div>
+
+    <div class="toolgroup">
+      <button class="tool-btn active" data-tool="select" title="Select start tile (V)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3l14 7-6 2-2 6-6-15z"/></svg>
+        Select tile <span class="kbd">V</span>
+      </button>
+      <button class="tool-btn" data-tool="mask" title="Draw mask boundary (M)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 12c2-4 4-6 8-6s6 2 8 6c-2 4-4 6-8 6s-6-2-8-6z" stroke-dasharray="2.5 2"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+        Draw mask <span class="kbd">M</span>
+      </button>
+      <button class="tool-btn" data-tool="pan" title="Pan canvas (Space / H)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 11V6.5a1.5 1.5 0 013 0V11M11 11V4.5a1.5 1.5 0 013 0V11M14 11.5V6.5a1.5 1.5 0 013 0V12M17 12V9.5a1.5 1.5 0 013 0V14c0 3.5-2 6.5-6 6.5h-2c-3 0-4.5-1-6-3l-2.5-4c-.5-.8 0-2 1.3-2 .6 0 1.1.3 1.5.8L8 14"/></svg>
+        Pan <span class="kbd">H</span>
+      </button>
+    </div>
+
+    <div class="toolgroup">
+      <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 7L4 12l5 5M4 12h11a5 5 0 010 10h-1"/></svg>
+      </button>
+      <button class="tool-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 7l5 5-5 5M20 12H9a5 5 0 000 10h1"/></svg>
+      </button>
+    </div>
+
+    <div class="spacer"></div>
+
+    <button class="icon-btn" id="btn-new-image" title="Load a different image">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+    </button>
+  </div>
+
+  <div id="stage-wrap">
+    <div id="stage" class="tool-select">
+      <canvas id="canvas-base"></canvas>
+      <canvas id="canvas-grid"></canvas>
+      <canvas id="canvas-mask"></canvas>
+      <canvas id="canvas-overlay"></canvas>
+    </div>
+
+    <div id="dropzone">
+      <div class="card">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V4M12 4L7 9M12 4l5 5"/><path d="M5 16v2a2 2 0 002 2h10a2 2 0 002-2v-2"/></svg>
+        <h2>Drop a sprite to begin</h2>
+        <p>Drag &amp; drop a PNG with transparency, or paste from your clipboard with <b style="color:var(--text-0)">Ctrl+V</b>. Works best with single isometric objects rendered on a transparent background.</p>
+        <div class="or">— or —</div>
+        <label class="filebtn" for="file-input">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+          Choose a file
+          <input type="file" id="file-input" accept="image/png,image/webp,image/gif" style="position:absolute;width:0;height:0;overflow:hidden;clip:rect(0,0,0,0)">
+        </label>
+      </div>
+    </div>
+
+    <div id="hud" style="display:none;">
+      <span><b id="hud-imgsize">0×0</b></span>
+      <span>·</span>
+      <span>tile <b id="hud-tile">0,0</b></span>
+      <span>·</span>
+      <span id="hud-zoom">100%</span>
+    </div>
+
+    <div id="zoom-controls" style="display:none;">
+      <button class="icon-btn" id="zoom-out" title="Zoom out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg>
+      </button>
+      <button class="icon-btn" id="zoom-reset" title="Fit to view" style="font-size:10.5px;">1:1</button>
+      <button class="icon-btn" id="zoom-in" title="Zoom in">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg>
+      </button>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <div id="panel">
+    <div class="panel-section">
+      <div class="panel-title">Isometric grid</div>
+      <div class="grid-controls">
+        <div class="gc-field">
+          <label>Tile width</label>
+          <div class="row">
+            <input type="range" id="tw-range" min="16" max="256" step="2" value="44">
+            <input type="number" id="tw-num" min="4" max="1024" value="44">
+          </div>
+        </div>
+        <div class="gc-field">
+          <label>Tile height</label>
+          <div class="row">
+            <input type="range" id="th-range" min="8" max="128" step="1" value="44">
+            <input type="number" id="th-num" min="2" max="512" value="44">
+          </div>
+        </div>
+        <div class="gc-field">
+          <label>Offset X</label>
+          <div class="row">
+            <input type="range" id="ox-range" min="-200" max="200" step="1" value="0">
+            <input type="number" id="ox-num" min="-4000" max="4000" value="0">
+          </div>
+        </div>
+        <div class="gc-field">
+          <label>Offset Y</label>
+          <div class="row">
+            <input type="range" id="oy-range" min="-200" max="200" step="1" value="0">
+            <input type="number" id="oy-num" min="-4000" max="4000" value="0">
+          </div>
+        </div>
+        <div class="gc-field">
+          <label>Image scale</label>
+          <div class="row">
+            <input type="range" id="sc-range" min="0.1" max="5" step="0.05" value="0.6">
+            <input type="number" id="sc-num" min="0.1" max="5" step="0.05" value="0.6">
+          </div>
+        </div>
+        <div class="gc-field gc-full">
+          <div class="checkbox-row" style="margin-top:0;">
+            <input type="checkbox" id="grid-visible" checked>
+            <label for="grid-visible" style="margin:0;">Show grid overlay</label>
+          </div>
+        </div>
+        <div class="gc-field gc-full">
+          <div class="checkbox-row" style="margin-top:8px;">
+            <input type="checkbox" id="img-visible" checked>
+            <label for="img-visible" style="margin:0;">Show original image</label>
+          </div>
+        </div>
+        <div class="gc-field gc-full">
+          <div class="checkbox-row" style="margin-top:8px;">
+            <input type="checkbox" id="snap-corners">
+            <label for="snap-corners" style="margin:0;">Snap to tile corners</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint-box" id="hint-select">
+        <div class="step"><span class="n">1</span><span>Align the teal diamond grid to your sprite's tile footprint using the controls above.</span></div>
+        <div class="step"><span class="n">2</span><span><b>Select tile</b> tool: click the diamond that anchors this part (e.g. base of a mast).</span></div>
+        <div class="step"><span class="n">3</span><span>Switch to <b>Draw mask</b> and trace the region belonging to that part. Click to add points, double-click or press Enter to close.</span></div>
+      </div>
+    </div>
+
+    <div class="panel-section grow">
+      <div class="panel-title">Layers <span class="count" id="layer-count">0</span></div>
+      <div id="layer-list">
+        <div class="layer-empty">No layers yet.<br>Select a tile, then draw a mask to create one.</div>
+      </div>
+    </div>
+
+    <div id="export-section">
+      <div class="export-row">
+        <button class="primary-btn" id="btn-export" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Export layers (.zip)
+        </button>
+      </div>
+      <div class="export-note">Each layer exports as a transparent PNG at the original image's full size, plus a <span style="color:var(--text-1)">manifest.json</span> with each layer's anchor tile and pixel offset — everything needed to relayer them back into place.</div>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <div class="left">
+      <span id="status-tool">Tool: Select start tile</span>
+      <span id="status-layer">No layer selected</span>
+    </div>
+    <div class="msg" id="status-msg"></div>
+  </div>
+
+</div>
+
+<script src="jszip.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
