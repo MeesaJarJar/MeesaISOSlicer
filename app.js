@@ -82,6 +82,8 @@
     // panning interaction
     isPanning: false,
     panStart: null,
+    // export
+    cropToMask: false,
     // misc
     nextLayerNum: 1,
     hoverTile: null,
@@ -1505,6 +1507,24 @@
     return c;
   }
 
+  // Cropped canvas — only the mask's bounding box, pixels elsewhere transparent
+  function extractCroppedLayer(layer, bbox) {
+    const c = document.createElement('canvas');
+    c.width = bbox.w; c.height = bbox.h;
+    const ctx = c.getContext('2d');
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(layer.points[0].x - bbox.x, layer.points[0].y - bbox.y);
+    for (let i = 1; i < layer.points.length; i++) {
+      ctx.lineTo(layer.points[i].x - bbox.x, layer.points[i].y - bbox.y);
+    }
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(state.img, -bbox.x, -bbox.y);
+    ctx.restore();
+    return c;
+  }
+
   // ---------------------------------------------------------------------
   // Export — zip of PNGs + manifest.json
   // ---------------------------------------------------------------------
@@ -1531,7 +1551,9 @@
       for (let i = 0; i < state.layers.length; i++) {
         const layer = state.layers[i];
         const bbox = polygonBBox(layer.points);
-        const fullCanvas = extractFullSizeLayer(layer);
+        const canvas = state.cropToMask && bbox
+          ? extractCroppedLayer(layer, bbox)
+          : extractFullSizeLayer(layer);
 
         let baseName = slugify(layer.name);
         let fileName = baseName + '.png';
@@ -1539,19 +1561,24 @@
         while (usedNames.has(fileName)) { fileName = baseName + '-' + (++dupe) + '.png'; }
         usedNames.add(fileName);
 
-        const blob = await new Promise(resolve => fullCanvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         zip.file(fileName, blob);
 
         const [anchorCx, anchorCy] = tileCenter(layer.tile.tx, layer.tile.ty);
 
-        manifest.layers.push({
+        const entry = {
           file: fileName,
           name: layer.name,
           anchorTile: { tx: layer.tile.tx, ty: layer.tile.ty },
           anchorPixel: { x: Math.round(anchorCx), y: Math.round(anchorCy) },
           boundingBox: bbox,
           maskPoints: layer.points.map(p => ({ x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 })),
-        });
+        };
+        if (state.cropToMask && bbox) {
+          entry.imageSize = { width: canvas.width, height: canvas.height };
+          entry.cropOffset = { x: bbox.x, y: bbox.y };
+        }
+        manifest.layers.push(entry);
       }
 
       zip.file('manifest.json', JSON.stringify(manifest, null, 2));
@@ -1623,6 +1650,11 @@
   snapCornersChk.addEventListener('change', () => {
     state.snapToTileCorners = snapCornersChk.checked;
     renderOverlay();
+  });
+
+  const cropToMaskChk = document.getElementById('crop-to-mask');
+  cropToMaskChk.addEventListener('change', () => {
+    state.cropToMask = cropToMaskChk.checked;
   });
 
   // ---------------------------------------------------------------------

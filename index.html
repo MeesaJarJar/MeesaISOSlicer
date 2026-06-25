@@ -526,13 +526,17 @@ if (document.readyState === 'loading') {
     </div>
 
     <div id="export-section">
+      <div class="checkbox-row">
+        <input type="checkbox" id="crop-to-mask">
+        <label for="crop-to-mask" style="margin:0;">Crop layers to mask bounding box</label>
+      </div>
       <div class="export-row">
         <button class="primary-btn" id="btn-export" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
           Export layers (.zip)
         </button>
       </div>
-      <div class="export-note">Each layer exports as a transparent PNG at the original image's full size, plus a <span style="color:var(--text-1)">manifest.json</span> with each layer's anchor tile and pixel offset — everything needed to relayer them back into place.</div>
+      <div class="export-note">Each layer exports as a transparent PNG, plus a <span style="color:var(--text-1)">manifest.json</span> with each layer's anchor tile and pixel offset — everything needed to relayer them back into place.</div>
     </div>
   </div>
 
